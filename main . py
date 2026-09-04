@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import requests
@@ -12,7 +12,6 @@ from moviepy.editor import *
 
 app = FastAPI()
 
-# CORS setup - ताकि आपकी Vercel वाली website इस API को कॉल कर सके
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Output folder बनाएं
 os.makedirs("output", exist_ok=True)
 
 @app.get("/")
@@ -31,26 +29,27 @@ def read_root():
 @app.post("/generate-video")
 async def generate_video(topic: str = "AI in 2026"):
     try:
-        # Step 1: Script बनाएं (Free - कोई API नहीं चाहिए)
-        script = f"क्या आप जानते हैं {topic} के बारे में? आज हम इसके रहस्य खोलेंगे। {topic} में कई छुपे हुए फैक्ट्स हैं। अंत तक देखें, क्योंकि आखिरी फैक्ट सबसे रोचक है।"
+        # Step 1: Script (Simple Hindi)
+        script = f"क्या आप जानते हैं {topic} के बारे में? आज हम इसके रहस्य खोलेंगे। अंत तक देखें।"
 
-        # Step 2: Free Voiceover बनाएं (Edge-TTS)
+        # Step 2: Voice (Edge-TTS)
         voice = "hi-IN-MadhurNeural"
         audio_path = f"output/audio_{uuid.uuid4()}.mp3"
         communicate = edge_tts.Communicate(script, voice)
         await communicate.save(audio_path)
 
-        # Step 3: Free Stock Videos खोजें (Pexels API)
+        # Step 3: Video Search (Pexels - Free Demo Key)
+        video_urls = []
         try:
-            video_search_url = f"https://api.pexels.com/videos/search?query={topic}&per_page=3"
-            headers = {"Authorization": "563492ad6f91700001000001"}  # यह एक फ्री डेमो की है
-            response = requests.get(video_search_url, headers=headers, timeout=10)
+            search_url = f"https://api.pexels.com/videos/search?query={topic}&per_page=3"
+            headers = {"Authorization": "563492ad6f91700001000001"}
+            response = requests.get(search_url, headers=headers, timeout=10)
             videos = response.json().get("videos", [])
             video_urls = [v["video_files"][0]["link"] for v in videos[:3]]
         except:
-            video_urls = []
+            pass
 
-        # Step 4: Stock Videos को Download करें
+        # Step 4: Download Videos
         clips = []
         for idx, url in enumerate(video_urls):
             try:
@@ -65,36 +64,35 @@ async def generate_video(topic: str = "AI in 2026"):
             except:
                 continue
 
-        # अगर कोई वीडियो नहीं मिला, तो रंगीन बैकग्राउंड बनाएं
+        # Agar video nahi mili, toh blue background
         if not clips:
             clip = ColorClip(size=(1080, 1920), color=(30, 30, 30), duration=10)
             clips.append(clip)
 
-        # Step 5: सभी वीडियो क्लिप्स को जोड़ें
+        # Step 5: Join Videos
         final_video = concatenate_videoclips(clips, method="compose")
 
-        # Step 6: आवाज़ जोड़ें
+        # Step 6: Add Audio
         if os.path.exists(audio_path):
             audio = AudioFileClip(audio_path)
             final_video = final_video.set_audio(audio)
 
-        # Step 7: टाइटल टेक्स्ट जोड़ें
+        # Step 7: Add Title
         title = TextClip(topic, fontsize=70, color='white', font='Arial', stroke_color='black', stroke_width=3)
         title = title.set_position('center').set_duration(5)
         final = CompositeVideoClip([final_video, title])
 
-        # Step 8: फाइनल वीडियो फाइल बनाएं
+        # Step 8: Write Video
         video_filename = f"final_{uuid.uuid4()}.mp4"
         video_path = f"output/{video_filename}"
 
         final.write_videofile(video_path, fps=30, codec='libx264', audio_codec='aac')
 
-        # Step 9: टेम्पोररी फाइलें साफ करें
+        # Step 9: Cleanup
         shutil.rmtree("output", ignore_errors=True)
         os.makedirs("output", exist_ok=True)
 
         return FileResponse(video_path, media_type="video/mp4", filename=video_filename)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
-        return {"error": str(e)}, 500
+        return {"error": str(e)}
