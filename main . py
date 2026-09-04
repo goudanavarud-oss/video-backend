@@ -38,7 +38,7 @@ async def generate_video(topic: str = "AI in 2026"):
         communicate = edge_tts.Communicate(script, voice)
         await communicate.save(audio_path)
 
-        # Step 3: Video Search (Pexels - Free Demo Key)
+        # Step 3: Video Search (Pexels - Free)
         video_urls = []
         try:
             search_url = f"https://api.pexels.com/videos/search?query={topic}&per_page=3"
@@ -64,7 +64,7 @@ async def generate_video(topic: str = "AI in 2026"):
             except:
                 continue
 
-        # Agar video nahi mili, toh blue background
+        # Agar video nahi milी, तो blue background
         if not clips:
             clip = ColorClip(size=(1080, 1920), color=(30, 30, 30), duration=10)
             clips.append(clip)
